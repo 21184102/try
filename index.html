@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>甘甜，新生 - 互動故事 (防呆修復版)</title>
+    <style>
+        /* 全域設定 */
+        body {
+            font-family: 'Microsoft JhengHei', '微軟正黑體', sans-serif;
+            background-color: #222;
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            user-select: none;
+        }
+
+        /* 遊戲主容器 */
+        #game-container {
+            width: 800px;
+            max-width: 95%;
+            background-color: #333;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 0 20px rgba(0,0,0,0.8);
+            border: 2px solid #444;
+        }
+
+        /* 場景顯示區 */
+        #scene-display {
+            width: 100%;
+            height: 400px;
+            background-color: #000;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* 圖片元件 */
+        #scene-image {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: none; /* 預設隱藏 */
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+            transition: opacity 0.3s;
+        }
+
+        /* 文字遮罩層 (永遠疊在圖片上) */
+        #scene-overlay {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            text-align: center;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 2;
+            transition: background 0.3s ease;
+        }
+
+        #scene-title {
+            font-size: 2.2em;
+            font-weight: bold;
+            text-shadow: 2px 2px 8px rgba(0,0,0,0.9);
+            margin-bottom: 15px;
+            padding: 0 10px;
+        }
+
+        #scene-desc {
+            font-size: 1.1em;
+            color: #fff;
+            background-color: rgba(0,0,0,0.6); /*文字背景深色框*/
+            padding: 8px 20px;
+            border-radius: 30px;
+            backdrop-filter: blur(2px);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            max-width: 80%;
+            line-height: 1.4;
+        }
+
+        /* 對話框 */
+        #dialogue-container {
+            padding: 25px;
+            height: 180px;
+            background-color: #f0f0f0;
+            color: #333;
+            position: relative;
+            cursor: pointer;
+            border-top: 4px solid #e67e22;
+            z-index: 3;
+        }
+
+        #dialogue-container:hover {
+            background-color: #fff;
+        }
+
+        #speaker-name {
+            font-weight: 900;
+            font-size: 1.3em;
+            margin-bottom: 10px;
+            color: #d35400;
+            display: inline-block;
+            background: #ffe0b2;
+            padding: 2px 8px;
+            border-radius: 4px;
+        }
+
+        #dialogue-text {
+            font-size: 1.2em;
+            line-height: 1.6;
+            min-height: 60px;
+        }
+
+        /* 選項區 */
+        #choices-container {
+            padding: 20px;
+            background-color: #444;
+            display: none;
+            flex-direction: column;
+            gap: 12px;
+            height: 180px;
+            justify-content: center;
+        }
+
+        .choice-button {
+            padding: 15px;
+            background-color: #2980b9;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: transform 0.1s, background-color 0.2s;
+            text-align: left;
+        }
+
+        .choice-button:hover {
+            background-color: #3498db;
+            transform: scale(1.01);
+        }
+
+        #click-hint {
+            position: absolute;
+            bottom: 15px;
+            right: 25px;
+            font-size: 0.9em;
+            color: #7f8c8d;
+            font-weight: bold;
+            animation: bounce 1s infinite alternate;
+        }
+
+        @keyframes bounce {
+            from { transform: translateY(0); }
+            to { transform: translateY(-5px); }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <div id="scene-display">
+            <img id="scene-image" src="" alt="場景圖片" onerror="handleImageError(this)">
+            
+            <div id="scene-overlay">
+                <div id="scene-title"></div>
+                <div id="scene-desc"></div>
+            </div>
+        </div>
+        
+        <div id="dialogue-container" onclick="advanceDialogue()">
+            <div id="speaker-name">角色</div>
+            <div id="dialogue-text">...</div>
+            <div id="click-hint">▼ 點擊繼續</div>
+        </div>
+
+        <div id="choices-container">
+            </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // 劇本資料 (已整合所有圖片檔名)
+        // ==========================================
+        const storyData = {
+            start: {
+                image: "start.png", 
+                color: "linear-gradient(to bottom, #87CEEB, #E0F7FA)", 
+                title: "淡水老街 - 甘蔗汁小舖",
+                desc: "風和日麗的午後，地上有一個塑膠杯",
+                textLines: [
+                    { speaker: "旁白", text: "在風和日麗的一天，一個適合逛老街的天氣。" },
+                    { speaker: "旁白", text: "有個直男買了甘蔗汁小舖的甘蔗汁，翠綠冰涼的甘蔗汁非常清甜。" },
+                    { speaker: "旁白", text: "直男開心的把甘蔗汁在30秒內喝完後，用投籃的方式把杯子丟向垃圾桶..." },
+                    { speaker: "旁白", text: "但毫不意外的，他失敗了！杯子掉到了地上，直男惱羞成怒並直接走掉。" },
+                    { speaker: "旁白", text: "與此同時，小杯杯醒來了……" },
+                    { speaker: "小杯杯", text: "「呃啊！為什麼我會在地上？我的身分直接從40元甘蔗汁變成0.0002元塑膠杯垃圾了……」" },
+                    { speaker: "旁白", text: "小杯杯意識到自己難逃變成環境負擔的命運。他原本以為生命會更有意義一點。" },
+                    { speaker: "旁白", text: "小杯杯於是決定……" }
+                ],
+                choices: [
+                    { text: "1. 不放棄，用力滾動身體", nextScene: "struggle" },
+                    { text: "2. 算了擺爛，死在地上", nextScene: "ending1_giveUp" }
+                ]
+            },
+            struggle: {
+                image: "struggle.png",
+                color: "linear-gradient(to bottom, #F57F17, #FFF59D)",
+                title: "努力掙扎的小杯杯",
+                desc: "阿嬤與老闆同時轉過頭來",
+                textLines: [
+                    { speaker: "旁白", text: "小杯杯永不放棄！他奮力掙扎並想盡辦法讓自己的身體滾動。" },
+                    { speaker: "旁白", text: "終於讓兩個人意識到了他的存在，兩個人同時向小杯杯的方向看去。" },
+                    { speaker: "旁白", text: "小杯杯要向誰求救呢？" }
+                ],
+                choices: [
+                    { text: "3. 看起來很會撿便宜的阿嬤", nextScene: "ending2_grandma" },
+                    { text: "4. 前父，甘蔗汁小舖的老闆", nextScene: "boss_encounter" }
+                ]
+            },
+            
+            // --- 結局區域 ---
+
+            ending1_giveUp: {
+                image: "ending1.png",
+                color: "linear-gradient(to bottom, #546E7A, #263238)",
+                title: "結局 1：金色水岸的垃圾",
+                desc: "髒髒的河裡",
+                textLines: [
+                    { speaker: "旁白", text: "小杯杯放棄掙扎，停止呼救並完全軟爛在地上。" },
+                    { speaker: "旁白", text: "最後被一個夢想成為內馬爾的9歲小孩一腳踢進髒髒的淡水河裏。" },
+                    { speaker: "旁白", text: "這樣對小杯杯真的好嗎？" }
+                ],
+                choices: [
+                    { text: "🔄 重新開始", nextScene: "start" }
+                ]
+            },
+            ending2_grandma: {
+                image: "ending2.png",
+                color: "linear-gradient(to bottom, #D32F2F, #FF5722)",
+                title: "結局 2：超極巨地獄滅焰",
+                desc: "資源回收站陷入火海",
+                textLines: [
+                    { speaker: "旁白", text: "阿嬤用高速閃現撿走了小杯杯，想拿去賣錢。" },
+                    { speaker: "小杯杯", text: "「阿嬤……我們的新家是哪裡……」" },
+                    { speaker: "旁白", text: "阿嬤聽不到，把小杯杯載到非正規回收站。結果那裡被黑道「松幫」攻擊！" },
+                    { speaker: "旁白", text: "一發「大字爆炎」，小杯杯跟所有回收品都被燒得一乾二淨。" },
+                    { speaker: "旁白", text: "空氣變得很臭……這樣對小杯杯真的好嗎？" }
+                ],
+                choices: [
+                    { text: "🔄 重新開始", nextScene: "start" }
+                ]
+            },
+            boss_encounter: {
+                image: "boss.png",
+                color: "linear-gradient(to bottom, #81C784, #4CAF50)",
+                title: "重逢老闆",
+                desc: "老闆驚訝的臉龐",
+                textLines: [
+                    { speaker: "老闆", text: "「厚……剛剛那個男的真沒良心，垃圾沒丟準也不回來收……」" },
+                    { speaker: "小杯杯", text: "「太好了爸比！你發現我了！！」" },
+                    { speaker: "老闆", text: "「為什麼杯子會講話啊！！！！！」" },
+                    { speaker: "旁白", text: "老闆覺得這是命運，決定讓小杯杯自己決定去留。" }
+                ],
+                choices: [
+                    { text: "5. 請老闆把小杯杯送去資源回收", nextScene: "ending3_recycle" },
+                    { text: "6. 先留在老闆的店裡", nextScene: "stay_at_shop" }
+                ]
+            },
+            ending3_recycle: {
+                image: "ending3.png",
+                color: "linear-gradient(to bottom, #F8BBD0, #EC407A)",
+                title: "結局 3：成為森林家族的衣服",
+                desc: "溫馨的再製過程",
+                textLines: [
+                    { speaker: "旁白", text: "老闆帶小杯杯去正規回收站。因為會講話，賣了20塊的好價錢。" },
+                    { speaker: "旁白", text: "經過工廠的清洗、再製，小杯杯變成了聚酯纖維不織布。" },
+                    { speaker: "旁白", text: "最後他被做成森林家族娃娃的小衣服，超級可愛！" }
+                ],
+                choices: [
+                    { text: "🔄 再玩一次，看看其他結局", nextScene: "start" }
+                ]
+            },
+            stay_at_shop: {
+                image: "shop.png",
+                color: "linear-gradient(to bottom, #FFF176, #FFD54F)",
+                title: "甘蔗汁舖的招財杯",
+                desc: "帥哥藝術家登場",
+                textLines: [
+                    { speaker: "旁白", text: "小杯杯留在店裡當招財吉祥物，只要客人把錢放在檸檬上，他就會說話。" },
+                    { speaker: "旁白", text: "兩個月後，一位超帥的長髮藝術家出現了！" },
+                    { speaker: "長髮男", text: "「這個會說話的杯子……激起了我的靈感！！！！」" },
+                    { speaker: "旁白", text: "藝術家想把小杯杯做成作品，詢問小杯杯意見：" }
+                ],
+                choices: [
+                    { text: "7. 我想變漂亮", nextScene: "ending4_art" },
+                    { text: "8. 我想變實用", nextScene: "ending5_plant" }
+                ]
+            },
+            ending4_art: {
+                image: "ending4.png",
+                color: "linear-gradient(to bottom, #E1BEE7, #9C27B0)",
+                title: "結局 4：麻雀變鳳凰",
+                desc: "拍賣會上的透明雕塑",
+                textLines: [
+                    { speaker: "旁白", text: "小杯杯變成了「重機神」角色的透明互動雕塑！" },
+                    { speaker: "旁白", text: "作品在拍賣會上賣出了天價，重機神動畫也決定重新上映。" },
+                    { speaker: "旁白", text: "小杯杯成為了台灣之光！" }
+                ],
+                choices: [
+                    { text: "🔄 再玩一次", nextScene: "start" }
+                ]
+            },
+            ending5_plant: {
+                image: "ending5.png",
+                color: "linear-gradient(to bottom, #C8E6C9, #388E3C)",
+                title: "結局 5：植髮成功",
+                desc: "小朋友手上的多肉盆栽",
+                textLines: [
+                    { speaker: "旁白", text: "藝術家將小杯杯結合甘蔗渣，做成了環保盆栽基底。" },
+                    { speaker: "小杯杯", text: "「哇！我都沒想過我可以長出頭髮(多肉植物)耶！杯生好有意義！」" },
+                    { speaker: "小朋友", text: "「媽媽你看杯子會講話耶。」" }
+                ],
+                choices: [
+                    { text: "🔄 再玩一次", nextScene: "start" }
+                ]
+            }
+        };
+
+        // ==========================================
+        // 核心邏輯 (包含錯誤處理)
+        // ==========================================
+        let currentSceneKey = 'start';
+        let currentLineIndex = 0;
+
+        const sceneImage = document.getElementById('scene-image');
+        const sceneOverlay = document.getElementById('scene-overlay');
+        
+        const sceneTitle = document.getElementById('scene-title');
+        const sceneDesc = document.getElementById('scene-desc');
+        const speakerName = document.getElementById('speaker-name');
+        const dialogueText = document.getElementById('dialogue-text');
+        const choicesContainer = document.getElementById('choices-container');
+        const dialogueContainer = document.getElementById('dialogue-container');
+        const clickHint = document.getElementById('click-hint');
+
+        function startGame() {
+            showScene('start');
+        }
+
+        // 當圖片載入失敗時觸發此函式 (防呆機制)
+        function handleImageError(img) {
+            console.warn("找不到圖片，切換回彩色背景模式。");
+            img.style.display = 'none'; // 隱藏破圖
+            const scene = storyData[currentSceneKey];
+            // 恢復彩色背景
+            sceneOverlay.style.background = scene.color || '#333';
+        }
+
+        function showScene(key) {
+            currentSceneKey = key;
+            currentLineIndex = 0;
+            const scene = storyData[key];
+
+            // 1. 設定文字
+            sceneTitle.textContent = scene.title || '';
+            sceneDesc.textContent = scene.desc || '';
+
+            // 2. 處理圖片顯示邏輯
+            if (scene.image) {
+                // 有設定圖片檔名，先假設圖片存在
+                sceneImage.style.display = 'block';
+                sceneImage.src = scene.image;
+                
+                // 設定為適合閱讀的半透明黑底
+                sceneOverlay.style.background = 'rgba(0, 0, 0, 0.4)';
+            } else {
+                // 劇本沒設定圖片
+                sceneImage.style.display = 'none';
+                sceneImage.src = ''; // 清空來源
+                sceneOverlay.style.background = scene.color || '#333';
+            }
+
+            // 介面重置
+            choicesContainer.style.display = 'none';
+            dialogueContainer.style.display = 'block';
+
+            renderLine();
+        }
+
+        function renderLine() {
+            const scene = storyData[currentSceneKey];
+            const line = scene.textLines[currentLineIndex];
+
+            speakerName.textContent = line.speaker;
+            dialogueText.textContent = line.text;
+
+            if (currentLineIndex === scene.textLines.length - 1) {
+                clickHint.textContent = "▼ 點擊開啟選項";
+                clickHint.style.color = "#d35400";
+            } else {
+                clickHint.textContent = "▼ 點擊繼續";
+                clickHint.style.color = "#7f8c8d";
+            }
+        }
+
+        function advanceDialogue() {
+            const scene = storyData[currentSceneKey];
+
+            if (currentLineIndex < scene.textLines.length - 1) {
+                currentLineIndex++;
+                renderLine();
+            } else {
+                showChoices();
+            }
+        }
+
+        function showChoices() {
+            const scene = storyData[currentSceneKey];
+            dialogueContainer.style.display = 'none';
+            choicesContainer.style.display = 'flex';
+            choicesContainer.innerHTML = '';
+
+            scene.choices.forEach(choice => {
+                const btn = document.createElement('button');
+                btn.className = 'choice-button';
+                btn.textContent = choice.text;
+                btn.onclick = function() {
+                    showScene(choice.nextScene);
+                };
+                choicesContainer.appendChild(btn);
+            });
+        }
+
+        startGame();
+
+    </script>
+</body>
+</html>
